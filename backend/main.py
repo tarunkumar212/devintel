@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -59,3 +59,27 @@ def create_log(log: LogCreate):
                 session.commit()
 
         return db_log
+
+
+@app.get("/incidents")
+def get_incidents():
+    with Session(engine) as session:
+        incidents = session.scalars(
+            select(Incident).order_by(Incident.created_at.desc())
+        ).all()
+
+        return incidents
+
+
+@app.get("/incidents/{incident_id}")
+def get_incident(incident_id: int):
+    with Session(engine) as session:
+        incident = session.get(Incident, incident_id)
+
+        if incident is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Incident not found",
+            )
+
+        return incident
