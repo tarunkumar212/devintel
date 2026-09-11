@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from backend.database import engine
 from backend.models import Incident, Log
 from backend.schemas import LogCreate
+from backend.services.incident_detection import detect_incident
 
 app = FastAPI()
 
@@ -38,34 +39,8 @@ def create_log(log: LogCreate):
         session.refresh(db_log)
 
         if log.level == "ERROR":
-            five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
-
-            error_count = session.scalar(
-                select(func.count())
-                .select_from(Log)
-                .where(
-                    Log.service == log.service,
-                    Log.level == "ERROR",
-                    Log.created_at >= five_minutes_ago,
-                )
-            )
-
-            open_incident = session.scalar(
-                select(Incident).where(
-                    Incident.service == log.service,
-                    Incident.status == "open",
-                )
-            )
-
-            if error_count > 5 and open_incident is None:
-                incident = Incident(
-                    service=log.service,
-                    error_count=error_count,
-                )
-
-                session.add(incident)
-                session.commit()
-
+            detect_incident(session, log.service)
+            
         return db_log
 
 
