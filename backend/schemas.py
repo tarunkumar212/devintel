@@ -5,3 +5,6 @@ class LogCreate(BaseModel):
     level: str
     message: str
     service: str
+
+class IncidentStatusUpdate(BaseModel):
+    status: str

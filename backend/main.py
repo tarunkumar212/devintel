@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 
 from backend.database import engine
 from backend.models import Incident, Log
-from backend.schemas import LogCreate
+from backend.schemas import IncidentStatusUpdate, LogCreate
 from backend.services.incident_detection import detect_incident
 
 app = FastAPI()
@@ -64,5 +64,35 @@ def get_incident(incident_id: int):
                 status_code=404,
                 detail="Incident not found",
             )
+
+        return incident
+
+
+@app.patch("/incidents/{incident_id}")
+def update_incident_status(
+    incident_id: int,
+    update: IncidentStatusUpdate,
+):
+    with Session(engine) as session:
+        incident = session.get(Incident, incident_id)
+
+        if incident is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Incident not found",
+            )
+
+        allowed_statuses = {"open", "investigating", "resolved"}
+
+        if update.status not in allowed_statuses:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid incident status",
+            )
+
+        incident.status = update.status
+
+        session.commit()
+        session.refresh(incident)
 
         return incident
