@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import DateTime, Integer, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -16,8 +16,8 @@ class Log(Base):
     message: Mapped[str] = mapped_column(String(1000), nullable=False)
     service: Mapped[str] = mapped_column(String(100), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
 
@@ -30,7 +30,7 @@ class Incident(Base):
     status: Mapped[str] = mapped_column(String(20), default="open", nullable=False)
     error_count: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime,
-        default=datetime.utcnow,
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )

@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -7,7 +7,7 @@ from backend.models import Incident, Log
 
 
 def detect_incident(session: Session, service: str):
-    five_minutes_ago = datetime.utcnow() - timedelta(minutes=5)
+    five_minutes_ago = datetime.now(timezone.utc) - timedelta(minutes=5)
 
     error_count = session.scalar(
         select(func.count())
