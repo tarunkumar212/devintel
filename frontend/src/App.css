@@ -37,3 +37,29 @@ h2 {
   font-weight: bold;
   text-transform: uppercase;
 }
+
+.filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.filters button,
+.status-actions button {
+  padding: 8px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+}
+
+.filters button:hover,
+.status-actions button:hover {
+  background: #f3f4f6;
+}
+
+.status-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}

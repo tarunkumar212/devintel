@@ -34,6 +34,7 @@ function App() {
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [statusFilter, setStatusFilter] = useState("all");
 
   useEffect(() => {
     fetch("http://127.0.0.1:8000/incidents")
@@ -62,6 +63,13 @@ function App() {
   if (error) {
     return <p>Error: {error}</p>;
   }
+  
+  const filteredIncidents =
+  statusFilter === "all"
+    ? incidents
+    : incidents.filter(
+        (incident) => incident.status === statusFilter
+      );
 
   return (
     <main>
@@ -70,10 +78,21 @@ function App() {
 
       <h2>Incidents</h2>
 
-      {incidents.length === 0 ? (
+      <div className="filters">
+        <button onClick={() => setStatusFilter("all")}>All</button>
+        <button onClick={() => setStatusFilter("open")}>Open</button>
+        <button onClick={() => setStatusFilter("investigating")}>
+          Investigating
+        </button>
+        <button onClick={() => setStatusFilter("resolved")}>
+          Resolved
+        </button>
+      </div>
+
+      {filteredIncidents.length === 0 ? (
         <p>No incidents detected.</p>
       ) : (
-        incidents.map((incident) => (
+        filteredIncidents.map((incident) => (
           <div key={incident.id} className="incident-card">
             <div className="incident-header">
               <h3>{incident.service}</h3>
