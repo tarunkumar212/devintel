@@ -8,3 +8,6 @@ class LogCreate(BaseModel):
 
 class IncidentStatusUpdate(BaseModel):
     status: str
+
+class ApplicationCreate(BaseModel):
+    name: str

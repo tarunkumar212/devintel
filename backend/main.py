@@ -4,10 +4,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from backend.database import engine
-from backend.models import Incident, Log
-from backend.schemas import IncidentStatusUpdate, LogCreate
+from backend.models import Application, Incident, Log
+from backend.schemas import ApplicationCreate, IncidentStatusUpdate, LogCreate
 from backend.services.incident_detection import detect_incident
 
 app = FastAPI()
@@ -96,3 +97,37 @@ def update_incident_status(
         session.refresh(incident)
 
         return incident
+
+
+@app.post("/applications", status_code=201)
+def create_application(application: ApplicationCreate):
+    with Session(engine) as session:
+        db_application = Application(
+            name=application.name,
+        )
+
+        session.add(db_application)
+
+        try:
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+            raise HTTPException(
+                status_code=409,
+                detail="Application already exists",
+            )
+
+        session.refresh(db_application)
+
+        return db_application
+
+
+@app.get("/applications")
+def get_applications():
+    with Session(engine) as session:
+        applications = session.scalars(
+            select(Application).order_by(Application.created_at.desc())
+        ).all()
+
+        return applications
+

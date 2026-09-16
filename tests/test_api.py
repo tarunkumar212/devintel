@@ -31,3 +31,30 @@ def test_invalid_incident_status():
     )
 
     assert response.status_code == 404
+
+
+def test_get_applications():
+    response = client.get("/applications")
+
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+
+def test_duplicate_application_returns_conflict():
+    application_name = "pytest-duplicate-app"
+
+    first_response = client.post(
+        "/applications",
+        json={"name": application_name},
+    )
+
+    second_response = client.post(
+        "/applications",
+        json={"name": application_name},
+    )
+
+    assert first_response.status_code in [201, 409]
+    assert second_response.status_code == 409
+    assert second_response.json() == {
+        "detail": "Application already exists"
+    }
