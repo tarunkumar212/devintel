@@ -58,3 +58,11 @@ def test_duplicate_application_returns_conflict():
     assert second_response.json() == {
         "detail": "Application already exists"
     }
+
+def test_incident_logs_not_found():
+    response = client.get("/incidents/999999999/logs")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Incident not found"
+    }

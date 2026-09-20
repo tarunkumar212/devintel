@@ -22,14 +22,14 @@ def detect_incident(
         )
     )
 
-    open_incident = session.scalar(
+    active_incident = session.scalar(
         select(Incident).where(
             Incident.application_id == application_id,
-            Incident.status == "open",
+            Incident.status.in_(["open", "investigating"]),
         )
     )
 
-    if error_count > 5 and open_incident is None:
+    if error_count > 5 and active_incident is None:
         incident = Incident(
             application_id=application_id,
             error_count=error_count,

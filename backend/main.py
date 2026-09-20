@@ -145,3 +145,29 @@ def get_applications():
 
         return applications
 
+
+@app.get("/incidents/{incident_id}/logs")
+def get_incident_logs(incident_id: int):
+    with Session(engine) as session:
+        incident = session.get(Incident, incident_id)
+
+        if incident is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Incident not found",
+            )
+
+        window_start = incident.created_at - timedelta(minutes=5)
+
+        logs = session.scalars(
+            select(Log)
+            .where(
+                Log.application_id == incident.application_id,
+                Log.level == "ERROR",
+                Log.created_at >= window_start,
+                Log.created_at <= incident.created_at,
+            )
+            .order_by(Log.created_at.asc())
+        ).all()
+
+        return logs
