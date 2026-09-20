@@ -31,10 +31,32 @@ function App() {
       });
   }
 
+
+  function viewIncidentDetails(incidentId) {
+  fetch(`http://127.0.0.1:8000/incidents/${incidentId}/logs`)
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error("Failed to load incident evidence");
+      }
+
+      return response.json();
+    })
+    .then((logs) => {
+      setSelectedIncidentId(incidentId);
+      setEvidenceLogs(logs);
+    })
+    .catch((error) => {
+      setError(error.message);
+    });
+  }
+
   const [incidents, setIncidents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [selectedIncidentId, setSelectedIncidentId] = useState(null);
+  const [evidenceLogs, setEvidenceLogs] = useState([]);
+  const [applications, setApplications] = useState([]);
 
   useEffect(() => {
     fetch("http://127.0.0.1:8000/incidents")
@@ -54,7 +76,33 @@ function App() {
       .finally(() => {
         setLoading(false);
       });
+
+      fetch("http://127.0.0.1:8000/applications")
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to fetch applications");
+        }
+
+        return response.json();
+      })
+      .then((data) => {
+        setApplications(data);
+      })
+      .catch((error) => {
+        setError(error.message);
+      });
+
   }, []);
+
+  function getApplicationName(applicationId) {
+    const application = applications.find(
+      (application) => application.id === applicationId
+    );
+
+    return application
+      ? application.name
+      : `Application #${applicationId}`;
+  }
 
   if (loading) {
     return <p>Loading incidents...</p>;
@@ -95,7 +143,8 @@ function App() {
         filteredIncidents.map((incident) => (
           <div key={incident.id} className="incident-card">
             <div className="incident-header">
-              <h3>{incident.service}</h3>
+              <h2>{getApplicationName(incident.application_id)}</h2>
+              <p>Application ID: {incident.application_id}</p>
               <span className="status">{incident.status}</span>
             </div>
 
@@ -122,7 +171,33 @@ function App() {
               >
                 Resolved
               </button>
+              <button onClick={() => viewIncidentDetails(incident.id)}>
+                View Details
+              </button>
             </div>
+
+            {selectedIncidentId === incident.id && (
+              <div className="incident-details">
+                <h3>Evidence Logs</h3>
+
+                {evidenceLogs.length === 0 ? (
+                  <p>No evidence logs found.</p>
+                ) : (
+                  evidenceLogs.map((log) => (
+                    <div key={log.id} className="evidence-log">
+                      <strong>{log.level}</strong>
+                      {" — "}
+                      {log.message}
+                      <br />
+                      <small>
+                        {new Date(log.created_at).toLocaleString()}
+                      </small>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
           </div>
         ))
       )}

@@ -146,6 +146,20 @@ def get_applications():
         return applications
 
 
+@app.get("/applications/{application_id}")
+def get_application(application_id: int):
+    with Session(engine) as session:
+        application = session.get(Application, application_id)
+
+        if application is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Application not found",
+            )
+
+        return application
+    
+
 @app.get("/incidents/{incident_id}/logs")
 def get_incident_logs(incident_id: int):
     with Session(engine) as session:
@@ -171,3 +185,4 @@ def get_incident_logs(incident_id: int):
         ).all()
 
         return logs
+

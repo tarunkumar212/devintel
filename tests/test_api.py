@@ -66,3 +66,11 @@ def test_incident_logs_not_found():
     assert response.json() == {
         "detail": "Incident not found"
     }
+
+def test_application_not_found():
+    response = client.get("/applications/999999999")
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Application not found"
+    }
