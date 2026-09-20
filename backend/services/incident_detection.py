@@ -6,14 +6,17 @@ from sqlalchemy.orm import Session
 from backend.models import Incident, Log
 
 
-def detect_incident(session: Session, service: str):
+def detect_incident(
+    session: Session,
+    application_id: int,
+    ):
     five_minutes_ago = datetime.now(timezone.utc) - timedelta(minutes=5)
 
     error_count = session.scalar(
         select(func.count())
         .select_from(Log)
         .where(
-            Log.service == service,
+            Log.application_id == application_id,
             Log.level == "ERROR",
             Log.created_at >= five_minutes_ago,
         )
@@ -21,14 +24,14 @@ def detect_incident(session: Session, service: str):
 
     open_incident = session.scalar(
         select(Incident).where(
-            Incident.service == service,
+            Incident.application_id == application_id,
             Incident.status == "open",
         )
     )
 
     if error_count > 5 and open_incident is None:
         incident = Incident(
-            service=service,
+            application_id=application_id,
             error_count=error_count,
         )
 

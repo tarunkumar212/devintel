@@ -29,10 +29,21 @@ def health_check():
 @app.post("/logs")
 def create_log(log: LogCreate):
     with Session(engine) as session:
+        application = session.get(
+            Application,
+            log.application_id,
+        )
+
+        if application is None:
+            raise HTTPException(
+                status_code=404,
+                detail="Application not found",
+            )
+
         db_log = Log(
             level=log.level,
             message=log.message,
-            service=log.service,
+            application_id=application.id,
         )
 
         session.add(db_log)
@@ -40,8 +51,11 @@ def create_log(log: LogCreate):
         session.refresh(db_log)
 
         if log.level == "ERROR":
-            detect_incident(session, log.service)
-            
+            detect_incident(
+            session,
+            application.id,
+            )
+
         return db_log
 
 

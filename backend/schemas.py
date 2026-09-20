@@ -4,7 +4,7 @@ from pydantic import BaseModel
 class LogCreate(BaseModel):
     level: str
     message: str
-    service: str
+    application_id: int
 
 class IncidentStatusUpdate(BaseModel):
     status: str
