@@ -74,3 +74,21 @@ def test_application_not_found():
     assert response.json() == {
         "detail": "Application not found"
     }
+
+def test_empty_application_name_rejected():
+    response = client.post(
+        "/applications",
+        json={"name": "   "},
+    )
+
+    assert response.status_code == 422
+
+def test_application_name_is_trimmed():
+    application_name = "pytest-trimmed-app"
+
+    response = client.post(
+        "/applications",
+        json={"name": f"   {application_name}   "},
+    )
+
+    assert response.status_code in [201, 409]

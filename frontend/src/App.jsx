@@ -57,6 +57,7 @@ function App() {
   const [selectedIncidentId, setSelectedIncidentId] = useState(null);
   const [evidenceLogs, setEvidenceLogs] = useState([]);
   const [applications, setApplications] = useState([]);
+  const [newApplicationName, setNewApplicationName] = useState("");
 
   useEffect(() => {
     fetch("http://127.0.0.1:8000/incidents")
@@ -103,6 +104,48 @@ function App() {
       ? application.name
       : `Application #${applicationId}`;
   }
+  
+  function createApplication(event) {
+    event.preventDefault();
+
+    fetch("http://127.0.0.1:8000/applications", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: newApplicationName,
+      }),
+    })
+      .then(async (response) => {
+          if (!response.ok) {
+            const errorData = await response.json();
+
+            let message = "Failed to create application";
+
+            if (typeof errorData.detail === "string") {
+              message = errorData.detail;
+            } else if (Array.isArray(errorData.detail)) {
+              message = errorData.detail[0]?.msg || message;
+            }
+
+            throw new Error(message);
+          }
+
+          return response.json();
+        })
+      .then((application) => {
+        setApplications((currentApplications) => [
+          application,
+          ...currentApplications,
+        ]);
+
+        setNewApplicationName("");
+      })
+      .catch((error) => {
+        setError(error.message);
+      });
+  }
 
   if (loading) {
     return <p>Loading incidents...</p>;
@@ -123,6 +166,31 @@ function App() {
     <main>
       <h1>DevIntel</h1>
       <p>Production Incident Intelligence Platform</p>
+
+      <section className="applications-section">
+        <h2>Applications</h2>
+
+        <form onSubmit={createApplication}>
+          <input
+            type="text"
+            placeholder="Application name"
+            value={newApplicationName}
+            onChange={(event) => setNewApplicationName(event.target.value)}
+          />
+
+          <button type="submit">
+            Register Application
+          </button>
+        </form>
+
+        <div className="applications-list">
+          {applications.map((application) => (
+            <div key={application.id}>
+              {application.name}
+            </div>
+          ))}
+        </div>
+      </section>
 
       <h2>Incidents</h2>
 
