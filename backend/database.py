@@ -5,7 +5,14 @@ from sqlalchemy import create_engine
 
 from backend.models import Base
 
-load_dotenv()
+
+environment = os.getenv("APP_ENV", "development")
+
+if environment == "test":
+    load_dotenv(".env.test")
+else:
+    load_dotenv(".env")
+
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 
