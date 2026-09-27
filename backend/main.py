@@ -26,7 +26,7 @@ def health_check():
     return {"status": "healthy"}
 
 
-@app.post("/logs")
+@app.post("/logs", status_code=201)
 def create_log(log: LogCreate):
     with Session(engine) as session:
         application = session.get(

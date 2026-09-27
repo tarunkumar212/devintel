@@ -27,7 +27,7 @@ def send_error_logs(application_id, count):
             },
         )
 
-        assert response.status_code == 200
+        assert response.status_code == 201
 
 
 def test_health_check():
@@ -203,3 +203,56 @@ def test_incident_evidence_returns_error_logs():
     for log in logs:
         assert log["application_id"] == application["id"]
         assert log["level"] == "ERROR"
+
+def test_log_for_unknown_application_rejected():
+    response = client.post(
+        "/logs",
+        json={
+            "application_id": 999999999,
+            "level": "ERROR",
+            "message": "Database timeout",
+        },
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Application not found"
+    }
+
+def test_invalid_log_level_rejected():
+    application = create_test_application()
+
+    response = client.post(
+        "/logs",
+        json={
+            "application_id": application["id"],
+            "level": "DEBUG",
+            "message": "Debug message",
+        },
+    )
+
+    assert response.status_code == 422
+
+def test_empty_log_message_rejected():
+    application = create_test_application()
+
+    response = client.post(
+        "/logs",
+        json={
+            "application_id": application["id"],
+            "level": "ERROR",
+            "message": "   ",
+        },
+    )
+
+    assert response.status_code == 422
+
+def test_five_errors_do_not_create_incident():
+    application = create_test_application()
+
+    send_error_logs(application["id"], 5)
+
+    incidents = client.get("/incidents").json()
+
+    assert len(incidents) == 0
+

@@ -6,6 +6,35 @@ class LogCreate(BaseModel):
     message: str
     application_id: int
 
+    @field_validator("level")
+    @classmethod
+    def validate_level(cls, value: str):
+        level = value.strip().upper()
+
+        allowed_levels = {"INFO", "WARNING", "ERROR"}
+
+        if level not in allowed_levels:
+            raise ValueError(
+                "Log level must be INFO, WARNING, or ERROR"
+            )
+
+        return level
+
+    @field_validator("message")
+    @classmethod
+    def validate_message(cls, value: str):
+        message = value.strip()
+
+        if not message:
+            raise ValueError("Log message cannot be empty")
+
+        if len(message) > 1000:
+            raise ValueError(
+                "Log message must be 1000 characters or fewer"
+            )
+
+        return message
+
 class IncidentStatusUpdate(BaseModel):
     status: str
 
