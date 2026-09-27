@@ -1,232 +1,200 @@
 # DevIntel
 
-**Production Incident Intelligence Platform**
+**DevIntel** is a production incident monitoring platform that automatically ingests application logs, detects abnormal error spikes, creates incidents, and provides engineers with the evidence needed to investigate and manage those incidents.
 
-DevIntel is a full-stack developer tool that ingests application logs, detects abnormal error patterns, automatically creates incidents, and presents them through a web dashboard.
+The current version represents the **DevIntel MVP** — a working end-to-end incident monitoring system built with FastAPI, React, PostgreSQL, and Python.
 
-The project is designed as a foundation for an AIOps platform that can later incorporate AI-powered root cause analysis, deployment correlation, historical incident retrieval, and remediation recommendations.
+---
 
 ## Problem
 
-During production incidents, engineers often need to manually inspect logs and correlate signals across multiple systems before understanding what went wrong.
+When an application starts failing in production, engineers often need to manually determine:
 
-DevIntel aims to reduce this investigation time by providing an intelligence layer that can:
+- which application is failing,
+- whether errors represent an isolated failure or a larger incident,
+- when the failure started,
+- which logs contributed to the incident,
+- whether an incident is already being investigated,
+- and when the issue has been resolved.
 
-- ingest application logs
-- detect abnormal error patterns
-- automatically create incidents
-- prevent duplicate incidents for an ongoing issue
-- manage incidents through their lifecycle
-- expose incident data through REST APIs
-- display and filter incidents through a dashboard
+That investigation process can require repeatedly searching through logs and manually tracking incident state.
 
-## Current Features
+DevIntel automates the early stages of this workflow.
 
-- Application health-check API
-- Log ingestion through REST API
-- PostgreSQL log persistence
-- Rule-based incident detection
-- 5-minute error detection window
-- Service-specific error counting
-- Incident deduplication
-- Incident retrieval APIs
-- Incident lifecycle management
-- Incident statuses: `open`, `investigating`, and `resolved`
-- Incident status updates through REST API
-- React incident dashboard
-- Dashboard status controls
-- Incident filtering by status
-- Timezone-aware UTC timestamps
-- CORS-enabled frontend/backend communication
-- Basic automated API tests
+---
 
-## Tech Stack
-
-### Backend
-
-- Python
-- FastAPI
-- SQLAlchemy
-- Pydantic
-- PostgreSQL
-- psycopg2
-- python-dotenv
-
-### Frontend
-
-- React
-- Vite
-- JavaScript
-- CSS
-
-### Testing
-
-- pytest
-- FastAPI TestClient
-
-### Development
-
-- Git
-- GitHub
-- Python virtual environments
-- Environment variables
-
-## Architecture
-
-DevIntel currently follows a modular monolith architecture. The API, persistence layer, and incident detection logic are kept logically separated while remaining part of a single backend application.
+## MVP Workflow
 
 ```text
-                         POST /logs
-Application / Service --------------------+
-                                          |
-                                          v
-                                 +------------------+
-                                 |     FastAPI      |
-                                 |    REST API      |
-                                 +------------------+
-                                          |
-                                          | Request validation
-                                          v
-                                 +------------------+
-                                 |     Pydantic     |
-                                 +------------------+
-                                          |
-                                          v
-                                 +------------------+
-                                 |    SQLAlchemy    |
-                                 +------------------+
-                                          |
-                           +--------------+--------------+
-                           |                             |
-                           v                             v
-                    +-------------+             +------------------+
-                    | PostgreSQL  |             | Incident         |
-                    | logs        |<------------| Detection        |
-                    | incidents   |             | Service          |
-                    +-------------+             +------------------+
-                           ^
-                           |
-                           | GET /incidents
-                           | PATCH /incidents/{id}
-                           |
-                    +-------------+
-                    |   FastAPI   |
-                    +-------------+
-                           ^
-                           |
-                           | HTTP
-                           |
-                    +-------------+
-                    |   React     |
-                    | Dashboard   |
-                    +-------------+
+Application
+    |
+    | HTTP logs
+    v
+DevIntel Log Ingestion API
+    |
+    v
+PostgreSQL
+    |
+    v
+Incident Detection
+    |
+    | More than 5 ERROR logs
+    | within 5 minutes
+    v
+Incident Created
+    |
+    v
+Evidence Logs
+    |
+    v
+React Dashboard
+    |
+    v
+Open -> Investigating -> Resolved
 ```
 
-The backend is intentionally implemented as a modular monolith rather than a collection of microservices. The current scope does not require the operational complexity of independently deployed services, while the separation of business logic allows individual components to evolve later.
+A demo application is included to simulate both healthy and failing application behavior.
 
-## How Incident Detection Works
+---
 
-DevIntel currently uses rule-based incident detection.
+# Features
 
-When an `ERROR` log is received:
+## Application Management
 
-1. The log is validated by Pydantic.
-2. The log is persisted in PostgreSQL.
-3. DevIntel looks at ERROR logs from the same service during the previous five minutes.
-4. The matching errors are counted.
-5. DevIntel checks whether an open incident already exists for that service.
-6. If the error count exceeds five and no open incident exists, a new incident is created.
+Applications can be registered directly from the React dashboard.
+
+Examples:
+
+```text
+payments-api
+orders-api
+inventory-api
+```
+
+Each application has a unique database identity.
+
+Logs and incidents reference applications using `application_id` foreign keys rather than duplicated service-name strings.
 
 Conceptually:
 
 ```text
-Incoming ERROR log
-        |
-        v
-Store log in PostgreSQL
-        |
-        v
-Count ERROR logs for same service
-during previous 5 minutes
-        |
-        v
-     Count > 5?
-       /     \
-     No       Yes
-     |         |
-    Stop       v
-         Open incident exists?
-              /       \
-            Yes        No
-             |          |
-            Stop        v
-                  Create incident
+Application
+    |
+    +----------------+
+    |                |
+    v                v
+   Log            Incident
+    |                |
+application_id   application_id
 ```
 
-Checking for an existing open incident prevents every subsequent error from generating another incident for the same ongoing problem.
+This provides a normalized data model and ensures logs and incidents always belong to a valid registered application.
+
+---
+
+## Automatic Log Ingestion
+
+Applications send logs to DevIntel through:
+
+```http
+POST /logs
+```
+
+Example payload:
+
+```json
+{
+  "application_id": 1,
+  "level": "ERROR",
+  "message": "Database timeout"
+}
+```
+
+Supported log levels:
+
+```text
+INFO
+WARNING
+ERROR
+```
+
+Incoming logs are validated before being stored.
+
+Successful log creation returns:
+
+```text
+201 Created
+```
+
+Logs referencing an unknown application are rejected.
+
+---
+
+## Incident Detection
+
+DevIntel currently uses rule-based incident detection.
+
+An incident is created when an application generates:
+
+```text
+more than 5 ERROR logs
+within the previous 5 minutes
+```
+
+Therefore:
+
+```text
+5 errors -> no incident
+6 errors -> incident
+```
+
+Detection is application-specific.
+
+Errors generated by one registered application do not contribute to another application's incident threshold.
+
+---
+
+## Active Incident Deduplication
+
+DevIntel prevents duplicate incidents from being created while an application already has an active incident.
+
+The following statuses are treated as active:
+
+```text
+open
+investigating
+```
+
+Example:
+
+```text
+ERROR spike
+    |
+    v
+Incident created
+status = open
+    |
+more ERROR logs
+    |
+    v
+no duplicate incident
+```
+
+If an engineer changes the incident to:
+
+```text
+investigating
+```
+
+additional errors still do not create another incident.
+
+Only after the active incident is resolved can the application create a future incident.
+
+---
 
 ## Incident Lifecycle
 
-An incident can have one of three statuses:
-
-```text
-open → investigating → resolved
-```
-
-The status can be changed directly from the React dashboard.
-
-When an incident is resolved, it no longer blocks DevIntel from creating a future incident for the same service when the detection threshold is reached again.
-
-The dashboard can filter incidents by:
-
-- All
-- Open
-- Investigating
-- Resolved
-
-## Time Handling
-
-DevIntel stores timestamps as timezone-aware UTC values.
-
-The backend uses UTC rather than a specific local timezone so incident timestamps remain consistent regardless of where the system or user is located.
-
-The React frontend converts the UTC timestamp into the user's local timezone when displaying the incident detection time.
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/health` | Check backend health |
-| `POST` | `/logs` | Ingest an application log |
-| `GET` | `/incidents` | Retrieve all incidents |
-| `GET` | `/incidents/{incident_id}` | Retrieve a specific incident |
-| `PATCH` | `/incidents/{incident_id}` | Update an incident's status |
-
-FastAPI also provides interactive API documentation through `/docs`.
-
-### Example: Ingest a Log
-
-Request:
-
-```json
-{
-  "level": "ERROR",
-  "message": "Payment database connection timeout",
-  "service": "payments"
-}
-```
-
-### Example: Update Incident Status
-
-Request:
-
-```json
-{
-  "status": "investigating"
-}
-```
-
-Valid incident statuses are:
+Incidents support three lifecycle states:
 
 ```text
 open
@@ -234,66 +202,897 @@ investigating
 resolved
 ```
 
-Invalid status values are rejected by the API.
+Engineers can update incident status directly from the React dashboard.
 
-## Running Locally
+Example lifecycle:
 
-### Prerequisites
+```text
+open
+  |
+  v
+investigating
+  |
+  v
+resolved
+```
 
-Make sure the following are installed:
+Status updates happen through the backend API and the React state is updated without requiring a full page reload.
 
-- Python
-- PostgreSQL
-- Node.js
-- npm
-- Git
+---
 
-### 1. Clone the Repository
+## Incident Evidence
+
+Each incident provides the ERROR logs associated with the incident's detection window.
+
+Endpoint:
+
+```http
+GET /incidents/{incident_id}/logs
+```
+
+Evidence is selected using:
+
+- the incident's `application_id`,
+- the incident creation timestamp,
+- the previous five-minute detection window,
+- ERROR-level logs.
+
+Conceptually:
+
+```text
+11:55                     12:00
+  |-------------------------|
+       detection window
+
+ERROR
+    ERROR
+        ERROR
+            ERROR
+                ERROR
+                    ERROR
+                         |
+                         v
+                   Incident created
+```
+
+These logs represent **detection evidence**.
+
+DevIntel does not currently claim that these logs represent the root cause of the incident.
+
+Root-cause analysis belongs to the later AI version of the project.
+
+---
+
+# React Dashboard
+
+The React dashboard provides:
+
+- application registration,
+- registered application listing,
+- incident listing,
+- application-name display,
+- incident status filtering,
+- incident lifecycle controls,
+- evidence-log inspection,
+- loading states,
+- empty states,
+- validation/error feedback.
+
+Incident filters include:
+
+```text
+All
+Open
+Investigating
+Resolved
+```
+
+---
+
+## Application Registration
+
+Applications can be created from the dashboard without using Swagger.
+
+The backend validates names before storing them.
+
+Examples:
+
+```text
+"payments-api"
+    -> accepted
+
+"   billing-api   "
+    -> stored as "billing-api"
+
+"     "
+    -> rejected
+```
+
+Duplicate application names are rejected with:
+
+```text
+409 Conflict
+```
+
+The React frontend displays the backend error message to the user.
+
+---
+
+## Dashboard Loading and Empty States
+
+The dashboard handles initial loading explicitly:
+
+```text
+Loading DevIntel...
+```
+
+Applications and incidents are loaded together during dashboard startup.
+
+If no applications exist:
+
+```text
+No applications registered yet.
+```
+
+If no incidents match the current filter:
+
+```text
+No incidents found.
+```
+
+---
+
+# Demo Application
+
+DevIntel includes a small external Python application used to demonstrate automatic telemetry ingestion.
+
+The demo application sends logs to DevIntel through HTTP without requiring Swagger or manual API requests.
+
+File:
+
+```text
+demo_app/main.py
+```
+
+---
+
+## Normal Mode
+
+Run:
 
 ```bash
-git clone <repository-url>
+DEVINTEL_APPLICATION_ID=1 python demo_app/main.py normal
+```
+
+The demo application continuously sends:
+
+```text
+INFO
+```
+
+logs.
+
+Example:
+
+```text
+Demo application request completed successfully
+```
+
+This simulates normal application behavior.
+
+---
+
+## Failure Mode
+
+Run:
+
+```bash
+DEVINTEL_APPLICATION_ID=1 python demo_app/main.py failure
+```
+
+The demo application continuously sends:
+
+```text
+ERROR
+```
+
+logs.
+
+Example:
+
+```text
+Demo application database timeout
+```
+
+After enough errors are received within the detection window, DevIntel automatically creates an incident.
+
+---
+
+## End-to-End Demo Flow
+
+The complete MVP can be demonstrated with:
+
+```text
+Demo Application
+       |
+       | automatic HTTP logs
+       v
+DevIntel API
+       |
+       v
+PostgreSQL
+       |
+       v
+Incident Detection
+       |
+       v
+Incident Created
+       |
+       v
+React Dashboard
+       |
+       v
+Evidence Inspection
+       |
+       v
+Investigating
+       |
+       v
+Resolved
+```
+
+This allows the core incident-monitoring workflow to be reproduced without manually sending requests through Swagger.
+
+---
+
+# Tech Stack
+
+## Backend
+
+- Python
+- FastAPI
+- SQLAlchemy
+- Pydantic
+
+## Frontend
+
+- React
+- Vite
+- JavaScript / JSX
+
+## Database
+
+- PostgreSQL
+
+## Testing
+
+- pytest
+- FastAPI TestClient
+- isolated PostgreSQL test database
+
+## Development
+
+- Git
+- GitHub
+- VS Code
+
+---
+
+# Architecture
+
+DevIntel currently uses a **modular monolith architecture**.
+
+```text
+                  +------------------+
+                  |   React Client   |
+                  +--------+---------+
+                           |
+                           | REST API
+                           v
+                  +------------------+
+                  |     FastAPI      |
+                  +--------+---------+
+                           |
+             +-------------+-------------+
+             |                           |
+             v                           v
+    Application / Log           Incident Detection
+       Management                      |
+             |                          |
+             +-------------+------------+
+                           |
+                           v
+                    +-------------+
+                    | PostgreSQL  |
+                    +-------------+
+```
+
+The application is intentionally not split into microservices.
+
+At the current scale, a modular monolith provides:
+
+- simpler deployment,
+- simpler debugging,
+- easier database transactions,
+- lower operational complexity,
+- clearer development workflow.
+
+Logical modules can still evolve into independently deployed services later if scale justifies that complexity.
+
+---
+
+# Backend Structure
+
+The backend currently separates core responsibilities such as:
+
+```text
+API routes
+    |
+    +-- application management
+    |
+    +-- log ingestion
+    |
+    +-- incident management
+    |
+    +-- incident detection service
+    |
+    +-- database models
+    |
+    +-- validation schemas
+```
+
+Incident detection logic is kept outside the main HTTP route implementation in a dedicated service module.
+
+---
+
+# Database Design
+
+The MVP uses PostgreSQL as its source of truth.
+
+The main entities are:
+
+```text
+Application
+Log
+Incident
+```
+
+Relationships:
+
+```text
+Application
+    |
+    +--------------------+
+    |                    |
+    v                    v
+   Log                Incident
+    |                    |
+application_id       application_id
+```
+
+Both relationships use foreign keys.
+
+---
+
+## Referential Integrity
+
+The database prevents logs and incidents from referencing nonexistent applications.
+
+For example:
+
+```text
+logs.application_id
+    |
+    +--> applications.id
+```
+
+and:
+
+```text
+incidents.application_id
+    |
+    +--> applications.id
+```
+
+The foreign-key columns are also `NOT NULL`.
+
+---
+
+## Normalized Application Identity
+
+Earlier prototypes represented application identity using duplicated strings such as:
+
+```text
+payments
+payments-api
+```
+
+The MVP instead uses:
+
+```text
+application_id
+```
+
+as the source of truth.
+
+Application names exist only in the `applications` table.
+
+This avoids inconsistencies such as:
+
+```text
+Log.service = "payment-api"
+
+Incident.service = "payments-api"
+```
+
+---
+
+## ORM Relationships
+
+SQLAlchemy relationships allow Python objects to navigate the data model.
+
+Conceptually:
+
+```python
+log.application
+incident.application
+
+application.logs
+application.incidents
+```
+
+The database foreign key provides referential integrity while SQLAlchemy `relationship()` provides object-level navigation.
+
+---
+
+# Time Handling
+
+DevIntel stores timezone-aware timestamps.
+
+The backend uses UTC-aware timestamps while the React frontend displays them using the user's local timezone.
+
+Frontend example:
+
+```javascript
+new Date(timestamp).toLocaleString()
+```
+
+This avoids relying on timezone-naive server timestamps.
+
+---
+
+# API Endpoints
+
+## Health
+
+```http
+GET /health
+```
+
+Checks whether the backend is running.
+
+Example response:
+
+```json
+{
+  "status": "healthy"
+}
+```
+
+---
+
+# Applications
+
+## Register Application
+
+```http
+POST /applications
+```
+
+Example:
+
+```json
+{
+  "name": "payments-api"
+}
+```
+
+Successful creation:
+
+```text
+201 Created
+```
+
+Duplicate name:
+
+```text
+409 Conflict
+```
+
+Invalid application data:
+
+```text
+422 Unprocessable Entity
+```
+
+---
+
+## List Applications
+
+```http
+GET /applications
+```
+
+Returns registered applications.
+
+---
+
+## Get Application
+
+```http
+GET /applications/{application_id}
+```
+
+Returns a specific application.
+
+Unknown applications return:
+
+```text
+404 Not Found
+```
+
+---
+
+# Logs
+
+## Ingest Log
+
+```http
+POST /logs
+```
+
+Example request:
+
+```json
+{
+  "application_id": 1,
+  "level": "ERROR",
+  "message": "Database timeout"
+}
+```
+
+Successful creation:
+
+```text
+201 Created
+```
+
+Unknown application:
+
+```text
+404 Not Found
+```
+
+Invalid log data:
+
+```text
+422 Unprocessable Entity
+```
+
+---
+
+# Incidents
+
+## List Incidents
+
+```http
+GET /incidents
+```
+
+Returns incidents ordered by creation time.
+
+---
+
+## Get Incident
+
+```http
+GET /incidents/{incident_id}
+```
+
+Unknown incident:
+
+```text
+404 Not Found
+```
+
+---
+
+## Update Incident Status
+
+```http
+PATCH /incidents/{incident_id}
+```
+
+Example:
+
+```json
+{
+  "status": "investigating"
+}
+```
+
+Supported statuses:
+
+```text
+open
+investigating
+resolved
+```
+
+---
+
+## Get Incident Evidence
+
+```http
+GET /incidents/{incident_id}/logs
+```
+
+Returns ERROR logs belonging to the incident's five-minute detection window.
+
+---
+
+# Validation
+
+Validation is implemented primarily on the backend so other API clients cannot bypass frontend checks.
+
+---
+
+## Application Validation
+
+Application names are:
+
+- trimmed,
+- required,
+- limited to 100 characters,
+- required to be unique.
+
+Whitespace-only names are rejected.
+
+---
+
+## Log Validation
+
+Supported log levels:
+
+```text
+INFO
+WARNING
+ERROR
+```
+
+Input such as:
+
+```text
+error
+```
+
+is normalized to:
+
+```text
+ERROR
+```
+
+Unsupported values such as:
+
+```text
+DEBUG
+```
+
+are rejected.
+
+Log messages:
+
+- cannot be empty,
+- are trimmed,
+- are limited to 1000 characters.
+
+---
+
+# Testing
+
+DevIntel uses an isolated PostgreSQL database for automated backend testing.
+
+Development database:
+
+```text
+devintel
+```
+
+Testing database:
+
+```text
+devintel_test
+```
+
+Tests never need to operate on the normal development database.
+
+---
+
+## Test Isolation
+
+Before each test, pytest recreates the schema in the test database.
+
+Conceptually:
+
+```text
+before test
+    |
+    v
+drop test schema
+    |
+    v
+create clean schema
+    |
+    v
+run test
+    |
+    v
+cleanup
+```
+
+This ensures tests are:
+
+- deterministic,
+- independent,
+- repeatable,
+- safe to rerun.
+
+---
+
+## Tested Behaviors
+
+The automated test suite covers areas including:
+
+- backend health,
+- incident listing,
+- missing incidents,
+- application listing,
+- missing applications,
+- application creation,
+- duplicate application rejection,
+- application-name trimming,
+- empty application rejection,
+- unknown application log rejection,
+- invalid log-level rejection,
+- empty log-message rejection,
+- incident threshold behavior,
+- incident creation,
+- duplicate active-incident prevention,
+- investigating-incident deduplication,
+- incident evidence retrieval.
+
+Important detection behavior is explicitly tested:
+
+```text
+5 ERROR logs
+    ->
+no incident
+
+6 ERROR logs
+    ->
+incident created
+```
+
+---
+
+## Running Tests
+
+From the project root:
+
+```bash
+python -m pytest
+```
+
+---
+
+# Local Development Setup
+
+## 1. Clone the Repository
+
+```bash
+git clone https://github.com/tarunkumar212/devintel.git
 cd devintel
 ```
 
-### 2. Create a Python Virtual Environment
+---
+
+## 2. Create Virtual Environment
 
 ```bash
 python -m venv venv
 ```
 
-Activate it.
-
-On Git Bash:
+Git Bash on Windows:
 
 ```bash
 source venv/Scripts/activate
 ```
 
-### 3. Install Backend Dependencies
+---
+
+## 3. Install Backend Dependencies
 
 ```bash
 pip install -r requirements.txt
 ```
 
-### 4. Create the PostgreSQL Database
+---
 
-Connect to PostgreSQL and create the database:
+## 4. Create PostgreSQL Development Database
+
+Create:
+
+```text
+devintel
+```
+
+Example:
 
 ```sql
 CREATE DATABASE devintel;
 ```
 
-### 5. Configure Environment Variables
+---
 
-Create a `.env` file in the project root:
+## 5. Configure Development Environment
 
-```env
-DATABASE_URL=postgresql://postgres:YOUR_PASSWORD@localhost:5432/devintel
+Create:
+
+```text
+.env
 ```
 
-The `.env` file is excluded from Git and should not be committed.
+Example:
 
-### 6. Start the Backend
+```env
+DATABASE_URL=postgresql://postgres:<password>@localhost:5432/devintel
+```
+
+Never commit database credentials.
+
+---
+
+## 6. Create Test Database
+
+Create:
+
+```text
+devintel_test
+```
+
+Example:
+
+```sql
+CREATE DATABASE devintel_test;
+```
+
+Create:
+
+```text
+.env.test
+```
+
+Example:
+
+```env
+DATABASE_URL=postgresql://postgres:<password>@localhost:5432/devintel_test
+```
+
+Both `.env` and `.env.test` are excluded from Git.
+
+---
+
+## 7. Start the Backend
 
 From the project root:
 
@@ -301,134 +1100,475 @@ From the project root:
 uvicorn backend.main:app --reload
 ```
 
-The backend runs locally on port `8000`.
+Backend URL:
 
-You can access the interactive FastAPI documentation at:
+```text
+http://127.0.0.1:8000
+```
+
+FastAPI interactive documentation:
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
-### 7. Start the Frontend
+---
 
-Open another terminal:
+## 8. Install Frontend Dependencies
 
 ```bash
 cd frontend
 npm install
+```
+
+---
+
+## 9. Start the Frontend
+
+```bash
 npm run dev
 ```
 
-Vite will start the React development server.
+Default Vite URL:
 
-### 8. Run Automated Tests
-
-From the project root with the virtual environment activated:
-
-```bash
-python -m pytest
+```text
+http://localhost:5173
 ```
 
-## Project Structure
+---
+
+## 10. Build the Frontend
+
+```bash
+npm run build
+```
+
+This verifies that the production React bundle can be generated successfully.
+
+---
+
+# Running the Demo Application
+
+First register an application through the DevIntel dashboard.
+
+Find its `application_id`.
+
+Then run the demo application.
+
+---
+
+## Normal Mode
+
+From the project root:
+
+```bash
+DEVINTEL_APPLICATION_ID=1 python demo_app/main.py normal
+```
+
+Normal mode sends INFO logs every few seconds.
+
+---
+
+## Failure Mode
+
+```bash
+DEVINTEL_APPLICATION_ID=1 python demo_app/main.py failure
+```
+
+Failure mode sends ERROR logs every few seconds.
+
+After the detection threshold is crossed, an incident should appear automatically in the React dashboard.
+
+---
+
+# Project Structure
 
 ```text
 devintel/
-├── backend/
-│   ├── services/
-│   │   └── incident_detection.py
-│   ├── database.py
-│   ├── main.py
-│   ├── models.py
-│   └── schemas.py
-│
-├── frontend/
-│   ├── src/
-│   │   ├── App.jsx
-│   │   └── App.css
-│   └── package.json
-│
-├── tests/
-│   └── test_api.py
-│
-├── .gitignore
-├── README.md
-└── requirements.txt
+|
++-- backend/
+|   |
+|   +-- main.py
+|   +-- database.py
+|   +-- models.py
+|   +-- schemas.py
+|   |
+|   +-- services/
+|       |
+|       +-- incident_detection.py
+|
++-- demo_app/
+|   |
+|   +-- main.py
+|
++-- frontend/
+|   |
+|   +-- src/
+|       |
+|       +-- App.jsx
+|       +-- App.css
+|
++-- tests/
+|   |
+|   +-- conftest.py
+|   +-- test_api.py
+|
++-- .env
++-- .env.test
++-- .gitignore
++-- requirements.txt
++-- README.md
 ```
 
-## Testing
+`.env` and `.env.test` are shown for reference but are not committed.
 
-The project currently includes automated API tests using pytest and FastAPI's TestClient.
+---
 
-The tests verify core API behavior including:
+# Current MVP Limitations
 
-- backend health endpoint
-- incident retrieval
-- missing incident handling
-- incident update error handling
+The MVP intentionally keeps several parts of the system simple.
 
-In addition to automated tests, the complete incident lifecycle has been tested end-to-end through the API and React dashboard.
+---
 
-## Current Limitations
+## Rule-Based Detection
 
-DevIntel v0.2 intentionally keeps several parts of the system simple while the core architecture is being developed.
-
-Current limitations include:
-
-- rule-based detection rather than intelligent anomaly detection
-- detection runs synchronously during log ingestion
-- no authentication or multi-user support
-- no application/service management
-- no background job processing
-- no external monitoring integrations
-- no GitHub or deployment correlation
-- no AI-powered root cause analysis
-- no production deployment yet
-
-The current error-window implementation can also count errors that occurred before a recently resolved incident if those logs are still within the five-minute detection window. More advanced incident-window handling can address this in a future version.
-
-## Future Direction
-
-DevIntel is being developed incrementally, with each stage remaining independently functional.
-
-Future development may include:
-
-- more robust incident detection
-- application and service management
-- authentication
-- incident timelines
-- GitHub commit and deployment correlation
-- cloud monitoring integrations
-- AI-assisted root cause analysis
-- evidence and confidence scoring
-- remediation recommendations
-- historical incident retrieval
-- Retrieval-Augmented Generation (RAG)
-- Redis and background workers
-- Docker containerization
-- CI/CD
-- cloud deployment
-- infrastructure as code
-
-## Status
-
-**DevIntel v0.2 — Working Prototype**
-
-The current version supports an end-to-end workflow:
+Incident detection currently uses:
 
 ```text
-Application Logs
-      ↓
-Log Ingestion
-      ↓
-PostgreSQL Persistence
-      ↓
-Error-Window Detection
-      ↓
-Incident Creation
-      ↓
-Incident Lifecycle Management
-      ↓
-React Dashboard
+> 5 ERROR logs in 5 minutes
 ```
 
-DevIntel will continue evolving toward an AI-assisted production incident intelligence platform.
+There is no statistical or machine-learning anomaly detection yet.
+
+---
+
+## Five-Minute Window After Resolution
+
+If an incident is resolved while its previous ERROR logs are still within the five-minute detection window, a new ERROR log may cause a new incident to be created using some of the previous errors.
+
+A future detector can model incident boundaries or maintain additional detector state.
+
+---
+
+## Trigger Error Count
+
+`Incident.error_count` represents the number of errors present when the incident was created.
+
+It is not continuously updated as additional errors arrive.
+
+Example:
+
+```text
+6 errors
+    ->
+incident created
+error_count = 6
+
+additional errors
+    ->
+same active incident
+error_count remains 6
+```
+
+This preserves the trigger-time detection state.
+
+---
+
+## Evidence Reconstruction
+
+Incident evidence is currently reconstructed using:
+
+```text
+application_id
++
+incident creation timestamp
++
+five-minute detection window
+```
+
+The system does not yet persist explicit incident-to-log evidence relationships.
+
+---
+
+## Synchronous Incident Detection
+
+Detection currently runs during log ingestion.
+
+This is acceptable for the lightweight MVP rule.
+
+More expensive processing will move outside the request path in later versions.
+
+---
+
+## No Authentication Yet
+
+The MVP does not currently include:
+
+- human user authentication,
+- authorization,
+- application API keys.
+
+Applications identify themselves using:
+
+```text
+application_id
+```
+
+The later production architecture will authenticate telemetry senders rather than trusting an arbitrary ID alone.
+
+---
+
+## No External Production Integrations Yet
+
+The MVP does not integrate with:
+
+- GitHub,
+- Azure operational signals,
+- deployment history.
+
+These belong to later versions.
+
+---
+
+## No AI Root-Cause Analysis Yet
+
+The MVP does not perform AI-based diagnosis.
+
+The current purpose is to create structured incidents and collect useful evidence.
+
+The AI Version will build on this data.
+
+---
+
+## Local Deployment
+
+The MVP currently focuses on local development.
+
+The later Production Version is planned to introduce:
+
+- Docker,
+- Redis/background processing,
+- CI/CD,
+- Azure deployment,
+- Terraform,
+- security hardening,
+- production configuration,
+- observability improvements.
+
+---
+
+# Development Progression
+
+DevIntel follows this progression:
+
+```text
+DevIntel v0.1
+      |
+      v
+DevIntel v0.2
+      |
+      v
+DevIntel MVP
+      |
+      v
+DevIntel AI Version
+      |
+      v
+DevIntel Production Version
+```
+
+---
+
+## DevIntel v0.1
+
+The first working prototype proved the core idea:
+
+```text
+ingest logs
+    ->
+detect error spike
+    ->
+create incident
+    ->
+display incident
+```
+
+---
+
+## DevIntel v0.2
+
+Expanded the prototype with:
+
+- incident lifecycle management,
+- status updates,
+- dashboard filtering,
+- timezone-aware timestamps,
+- improved project structure and documentation.
+
+---
+
+## DevIntel MVP
+
+The MVP turns the prototype into a small but legitimate incident-monitoring application.
+
+It adds:
+
+- registered applications,
+- normalized application relationships,
+- database foreign keys,
+- automatic telemetry ingestion,
+- validation,
+- incident evidence,
+- incident detail views,
+- application management UI,
+- deterministic test infrastructure,
+- automatic demo application,
+- frontend loading/error/empty states,
+- full end-to-end incident workflow.
+
+---
+
+# Planned AI Version
+
+The next major phase is the **DevIntel AI Version**.
+
+Planned capabilities include:
+
+- AI-assisted root-cause analysis,
+- evidence-based explanations,
+- confidence information,
+- remediation recommendations,
+- historical incident retrieval,
+- RAG,
+- AI incident assistant,
+- GitHub context,
+- Azure operational/deployment context.
+
+The goal is to evolve the current workflow from:
+
+```text
+Incident
+    ->
+Evidence
+    ->
+Engineer investigation
+```
+
+toward:
+
+```text
+Incident
+    |
+    v
+Evidence
+    |
+    +--> Logs
+    +--> Historical incidents
+    +--> GitHub changes
+    +--> Cloud/deployment context
+    |
+    v
+AI Analysis
+    |
+    +--> Probable root cause
+    +--> Supporting evidence
+    +--> Confidence
+    +--> Recommended remediation
+```
+
+---
+
+# Planned Production Version
+
+The Production Version is intended to focus on operational maturity.
+
+Planned areas include:
+
+- Dockerized services,
+- Redis/background workers,
+- CI/CD,
+- Azure deployment,
+- Terraform infrastructure-as-code,
+- secure application credentials,
+- authentication and authorization,
+- production environment configuration,
+- improved observability,
+- scalability and reliability improvements.
+
+---
+
+# MVP Acceptance Flow
+
+The completed MVP supports the following end-to-end scenario:
+
+```text
+Register application
+        |
+        v
+Run demo application
+        |
+        v
+Automatic telemetry arrives
+        |
+        v
+Normal logs are stored
+        |
+        v
+Application enters failure mode
+        |
+        v
+ERROR logs accumulate
+        |
+        v
+Incident threshold crossed
+        |
+        v
+Incident created automatically
+        |
+        v
+Dashboard displays incident
+        |
+        v
+Engineer views evidence
+        |
+        v
+Incident -> Investigating
+        |
+        v
+No duplicate active incident
+        |
+        v
+Incident -> Resolved
+```
+
+---
+
+# Current Status
+
+## DevIntel MVP — Complete
+
+The MVP demonstrates a working production-incident monitoring workflow:
+
+```text
+application registration
+        |
+        v
+automatic log ingestion
+        |
+        v
+error-spike detection
+        |
+        v
+incident creation
+        |
+        v
+incident evidence
+        |
+        v
+incident investigation
+        |
+        v
+incident resolution
+```
+
+The next development phase is **DevIntel AI Version**, focused on turning the structured incident and evidence data into AI-assisted root-cause analysis.
