@@ -34,28 +34,36 @@ DevIntel is a production incident intelligence platform that ingests application
 - Terraform infrastructure
 - Security and observability
 
-## Architecture
+### 1. Application Architecture
 
 ```text
 React Frontend
-     |
-     v
+      ↓
 FastAPI Backend
-     |
-     v
+      ↓
 PostgreSQL
-     |
-     v
+      ↓
 Incident Detection
-     |
-     v
+      ↓
 Incident Evidence
-     |
-     v
+      ↓
 AI / RAG / RCA
-     |
-     v
-PostgreSQL
+      ↓
+Root Cause + Recommendation
+```
+
+### 2. Deployment & Infrastructure
+
+```text
+GitHub
+   ↓
+GitHub Actions
+   ↓
+Docker
+   ↓
+Azure
+   ↑
+Terraform
 ```
 
 DevIntel follows a modular monolith architecture, keeping the system simple while separating application management, log ingestion, incident detection, and AI/RCA responsibilities.
