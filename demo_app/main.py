@@ -7,7 +7,7 @@ import requests
 
 DEVINTEL_URL = "http://127.0.0.1:8000/logs"
 APPLICATION_ID = int(
-    os.getenv("DEVINTEL_APPLICATION_ID", "1") # we can give the application ID in the terminal while running to send logs to that application.
+    os.getenv("DEVINTEL_APPLICATION_ID", "32") # we can give the application ID in the terminal while running to send logs to that application.
 )
 
 
@@ -43,7 +43,7 @@ def run_failure_mode():
     while True:
         send_log(
             "ERROR",
-            "Demo application database timeout",
+            "Demo application - there is some problem in the payment API of gpay",
         )
 
         time.sleep(2)

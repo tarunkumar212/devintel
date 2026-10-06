@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, field_validator
 
 
@@ -11,7 +13,11 @@ class LogCreate(BaseModel):
     def validate_level(cls, value: str):
         level = value.strip().upper()
 
-        allowed_levels = {"INFO", "WARNING", "ERROR"}
+        allowed_levels = {
+            "INFO",
+            "WARNING",
+            "ERROR",
+        }
 
         if level not in allowed_levels:
             raise ValueError(
@@ -26,7 +32,9 @@ class LogCreate(BaseModel):
         message = value.strip()
 
         if not message:
-            raise ValueError("Log message cannot be empty")
+            raise ValueError(
+                "Log message cannot be empty"
+            )
 
         if len(message) > 1000:
             raise ValueError(
@@ -35,8 +43,10 @@ class LogCreate(BaseModel):
 
         return message
 
+
 class IncidentStatusUpdate(BaseModel):
     status: str
+
 
 class ApplicationCreate(BaseModel):
     name: str
@@ -47,9 +57,46 @@ class ApplicationCreate(BaseModel):
         cleaned_name = value.strip()
 
         if not cleaned_name:
-            raise ValueError("Application name cannot be empty")
+            raise ValueError(
+                "Application name cannot be empty"
+            )
 
         if len(cleaned_name) > 100:
-            raise ValueError("Application name must be 100 characters or fewer")
+            raise ValueError(
+                "Application name must be 100 characters or fewer"
+            )
 
         return cleaned_name
+
+
+class EvidenceLogResponse(BaseModel):
+    id: int
+    level: str
+    message: str
+    created_at: datetime
+
+
+class IncidentContextResponse(BaseModel):
+    incident_id: int
+    status: str
+    error_count: int
+    created_at: datetime
+    application_id: int
+    application_name: str
+    evidence_logs: list[EvidenceLogResponse]
+
+
+class HistoricalMatchResponse(BaseModel):
+    incident_id: int
+    similarity: float
+    root_cause: str
+
+
+class RCAResponse(BaseModel):
+    incident_id: int
+    root_cause: str
+    evidence: list[str]
+    confidence: float
+    recommendation: str
+    historical_matches: list[HistoricalMatchResponse]
+    created_at: datetime

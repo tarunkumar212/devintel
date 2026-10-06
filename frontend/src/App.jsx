@@ -12,6 +12,9 @@ function App() {
   const [selectedIncidentId, setSelectedIncidentId] = useState(null);
   const [evidenceLogs, setEvidenceLogs] = useState([]);
 
+  const [rcaResults, setRcaResults] = useState({});
+  const [rcaLoadingId, setRcaLoadingId] = useState(null);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -79,7 +82,8 @@ function App() {
           if (typeof errorData.detail === "string") {
             message = errorData.detail;
           } else if (Array.isArray(errorData.detail)) {
-            message = errorData.detail[0]?.msg || message;
+            message =
+              errorData.detail[0]?.msg || message;
           }
 
           throw new Error(message);
@@ -104,16 +108,21 @@ function App() {
   function updateIncidentStatus(incidentId, status) {
     setError(null);
 
-    fetch(`http://127.0.0.1:8000/incidents/${incidentId}`, {
-      method: "PATCH",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ status }),
-    })
+    fetch(
+      `http://127.0.0.1:8000/incidents/${incidentId}`,
+      {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status }),
+      }
+    )
       .then((response) => {
         if (!response.ok) {
-          throw new Error("Failed to update incident");
+          throw new Error(
+            "Failed to update incident"
+          );
         }
 
         return response.json();
@@ -133,24 +142,85 @@ function App() {
   }
 
 
-  function viewIncidentDetails(incidentId) {
+  async function viewIncidentDetails(incidentId) {
     setError(null);
 
-    fetch(`http://127.0.0.1:8000/incidents/${incidentId}/logs`)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Failed to load incident evidence");
-        }
+    try {
+      const [logsResponse, rcaResponse] =
+        await Promise.all([
+          fetch(
+            `http://127.0.0.1:8000/incidents/${incidentId}/logs`
+          ),
+          fetch(
+            `http://127.0.0.1:8000/incidents/${incidentId}/rca`
+          ),
+        ]);
 
-        return response.json();
-      })
-      .then((logs) => {
-        setSelectedIncidentId(incidentId);
-        setEvidenceLogs(logs);
-      })
-      .catch((error) => {
-        setError(error.message);
-      });
+      if (!logsResponse.ok) {
+        throw new Error(
+          "Failed to load incident evidence"
+        );
+      }
+
+      const logs = await logsResponse.json();
+
+      setSelectedIncidentId(incidentId);
+      setEvidenceLogs(logs);
+
+      if (rcaResponse.ok) {
+        const rca = await rcaResponse.json();
+
+        setRcaResults((currentResults) => ({
+          ...currentResults,
+          [incidentId]: rca,
+        }));
+      } else if (rcaResponse.status === 404) {
+        setRcaResults((currentResults) => ({
+          ...currentResults,
+          [incidentId]: null,
+        }));
+      } else {
+        throw new Error(
+          "Failed to load AI analysis"
+        );
+      }
+    } catch (error) {
+      setError(error.message);
+    }
+  }
+
+
+  async function analyzeIncident(incidentId) {
+    setError(null);
+    setRcaLoadingId(incidentId);
+
+    try {
+      const response = await fetch(
+        `http://127.0.0.1:8000/incidents/${incidentId}/analyze`,
+        {
+          method: "POST",
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail || "Failed to analyze incident"
+        );
+      }
+
+      setRcaResults((currentResults) => ({
+        ...currentResults,
+        [incidentId]: data,
+      }));
+
+      setSelectedIncidentId(incidentId);
+    } catch (error) {
+      setError(error.message);
+    } finally {
+      setRcaLoadingId(null);
+    }
   }
 
 
@@ -158,7 +228,8 @@ function App() {
     statusFilter === "all"
       ? incidents
       : incidents.filter(
-          (incident) => incident.status === statusFilter
+          (incident) =>
+            incident.status === statusFilter
         );
 
 
@@ -175,7 +246,9 @@ function App() {
   return (
     <main>
       <h1>DevIntel</h1>
-      <p>Production Incident Intelligence Platform</p>
+      <p>
+        Production Incident Intelligence Platform
+      </p>
 
       {error && (
         <p className="error-message">
@@ -192,7 +265,9 @@ function App() {
             placeholder="Application name"
             value={newApplicationName}
             onChange={(event) =>
-              setNewApplicationName(event.target.value)
+              setNewApplicationName(
+                event.target.value
+              )
             }
           />
 
@@ -203,7 +278,9 @@ function App() {
 
         <div className="applications-list">
           {applications.length === 0 ? (
-            <p>No applications registered yet.</p>
+            <p>
+              No applications registered yet.
+            </p>
           ) : (
             applications.map((application) => (
               <div key={application.id}>
@@ -219,22 +296,30 @@ function App() {
         <h2>Incidents</h2>
 
         <div className="filters">
-          <button onClick={() => setStatusFilter("all")}>
+          <button
+            onClick={() => setStatusFilter("all")}
+          >
             All
           </button>
 
-          <button onClick={() => setStatusFilter("open")}>
+          <button
+            onClick={() => setStatusFilter("open")}
+          >
             Open
           </button>
 
           <button
-            onClick={() => setStatusFilter("investigating")}
+            onClick={() =>
+              setStatusFilter("investigating")
+            }
           >
             Investigating
           </button>
 
           <button
-            onClick={() => setStatusFilter("resolved")}
+            onClick={() =>
+              setStatusFilter("resolved")
+            }
           >
             Resolved
           </button>
@@ -244,118 +329,200 @@ function App() {
         {filteredIncidents.length === 0 ? (
           <p>No incidents found.</p>
         ) : (
-          filteredIncidents.map((incident) => (
-            <div
-              key={incident.id}
-              className="incident-card"
-            >
-              <div className="incident-header">
-                <h2>
-                  {getApplicationName(
-                    incident.application_id
-                  )}
-                </h2>
+          filteredIncidents.map((incident) => {
+            const rca = rcaResults[incident.id];
+
+            return (
+              <div
+                key={incident.id}
+                className="incident-card"
+              >
+                <div className="incident-header">
+                  <h2>
+                    {getApplicationName(
+                      incident.application_id
+                    )}
+                  </h2>
+
+                  <p>
+                    Application ID:{" "}
+                    {incident.application_id}
+                  </p>
+
+                  <span className="status">
+                    {incident.status}
+                  </span>
+                </div>
 
                 <p>
-                  Application ID:{" "}
-                  {incident.application_id}
+                  Error count:{" "}
+                  {incident.error_count}
                 </p>
 
-                <span className="status">
-                  {incident.status}
-                </span>
-              </div>
-
-              <p>
-                Error count: {incident.error_count}
-              </p>
-
-              <p>
-                Detected:{" "}
-                {new Date(
-                  incident.created_at
-                ).toLocaleString()}
-              </p>
+                <p>
+                  Detected:{" "}
+                  {new Date(
+                    incident.created_at
+                  ).toLocaleString()}
+                </p>
 
 
-              <div className="status-actions">
-                <button
-                  onClick={() =>
-                    updateIncidentStatus(
-                      incident.id,
-                      "open"
-                    )
-                  }
-                >
-                  Open
-                </button>
+                <div className="status-actions">
+                  <button
+                    onClick={() =>
+                      updateIncidentStatus(
+                        incident.id,
+                        "open"
+                      )
+                    }
+                  >
+                    Open
+                  </button>
 
-                <button
-                  onClick={() =>
-                    updateIncidentStatus(
-                      incident.id,
-                      "investigating"
-                    )
-                  }
-                >
-                  Investigating
-                </button>
+                  <button
+                    onClick={() =>
+                      updateIncidentStatus(
+                        incident.id,
+                        "investigating"
+                      )
+                    }
+                  >
+                    Investigating
+                  </button>
 
-                <button
-                  onClick={() =>
-                    updateIncidentStatus(
-                      incident.id,
-                      "resolved"
-                    )
-                  }
-                >
-                  Resolved
-                </button>
+                  <button
+                    onClick={() =>
+                      updateIncidentStatus(
+                        incident.id,
+                        "resolved"
+                      )
+                    }
+                  >
+                    Resolved
+                  </button>
 
-                <button
-                  onClick={() =>
-                    viewIncidentDetails(incident.id)
-                  }
-                >
-                  View Details
-                </button>
-              </div>
+                  <button
+                    onClick={() =>
+                      viewIncidentDetails(
+                        incident.id
+                      )
+                    }
+                  >
+                    View Details
+                  </button>
 
-
-              {selectedIncidentId === incident.id && (
-                <div className="incident-details">
-                  <h3>Evidence Logs</h3>
-
-                  {evidenceLogs.length === 0 ? (
-                    <p>No evidence logs found.</p>
-                  ) : (
-                    evidenceLogs.map((log) => (
-                      <div
-                        key={log.id}
-                        className="evidence-log"
-                      >
-                        <strong>
-                          {log.level}
-                        </strong>
-
-                        {" — "}
-
-                        {log.message}
-
-                        <br />
-
-                        <small>
-                          {new Date(
-                            log.created_at
-                          ).toLocaleString()}
-                        </small>
-                      </div>
-                    ))
-                  )}
+                  <button
+                    onClick={() =>
+                      analyzeIncident(
+                        incident.id
+                      )
+                    }
+                    disabled={
+                      rcaLoadingId === incident.id
+                    }
+                  >
+                    {rcaLoadingId === incident.id
+                      ? "Analyzing..."
+                      : "Analyze with AI"}
+                  </button>
                 </div>
-              )}
-            </div>
-          ))
+
+
+                {selectedIncidentId === incident.id && (
+                  <div className="incident-details">
+                    <h3>Evidence Logs</h3>
+
+                    {evidenceLogs.length === 0 ? (
+                      <p>
+                        No evidence logs found.
+                      </p>
+                    ) : (
+                      evidenceLogs.map((log) => (
+                        <div
+                          key={log.id}
+                          className="evidence-log"
+                        >
+                          <strong>
+                            {log.level}
+                          </strong>
+
+                          {" — "}
+
+                          {log.message}
+
+                          <br />
+
+                          <small>
+                            {new Date(
+                              log.created_at
+                            ).toLocaleString()}
+                          </small>
+                        </div>
+                      ))
+                    )}
+
+                    {rca && (
+                      <div className="ai-rca">
+                        <h3>
+                          AI Root Cause Analysis
+                        </h3>
+
+                        <p>
+                          <strong>
+                            Root Cause:
+                          </strong>{" "}
+                          {rca.root_cause}
+                        </p>
+
+                        <p>
+                          <strong>
+                            Confidence:
+                          </strong>{" "}
+                          {Math.round(
+                            rca.confidence * 100
+                          )}
+                          %
+                        </p>
+
+                        <p>
+                          <strong>
+                            Recommendation:
+                          </strong>{" "}
+                          {rca.recommendation}
+                        </p>
+
+                        <p>
+                          <strong>
+                            Supporting Evidence:
+                          </strong>
+                        </p>
+
+                        <ul>
+                          {rca.evidence.map(
+                            (item, index) => (
+                              <li key={index}>
+                                {item}
+                              </li>
+                            )
+                          )}
+                        </ul>
+
+                        <p>
+                          <strong>
+                            Historical Matches:
+                          </strong>{" "}
+                          {
+                            rca.historical_matches
+                              .length
+                          }
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
         )}
       </section>
     </main>
